@@ -16,13 +16,11 @@ const coordinators = [
   { event: 'Weblica', code: 'WE', email: 'WE@gmail.com', password: 'Cybersentinel@techWE', day: 'DAY_1', type: 'TEAM' },
   { event: 'Xcoders', code: 'XC', email: 'XC@gmail.com', password: 'Cybersentinel@techXC', day: 'DAY_1', type: 'INDIVIDUAL' },
   // Non-Technical Events
-  { event: 'Group Dance', code: 'GD', email: 'GD@gmail.com', password: 'Cybersentinel@nonGD', day: 'DAY_2', type: 'TEAM' },
   { event: 'Spotlight', code: 'SP', email: 'SP@gmail.com', password: 'Cybersentinel@nonSP', day: 'DAY_2', type: 'INDIVIDUAL' },
   { event: 'Connections', code: 'CO', email: 'CO@gmail.com', password: 'Cybersentinel@nonCO', day: 'DAY_2', type: 'TEAM' },
   { event: 'Find the BGM', code: 'FTB', email: 'FTB@gmail.com', password: 'Cybersentinel@nonFTB', day: 'DAY_2', type: 'TEAM' },
   { event: 'Mixed Signals', code: 'MS', email: 'MS@gmail.com', password: 'Cybersentinel@nonMS', day: 'DAY_2', type: 'TEAM' },
-  { event: 'Lost in Lyrics', code: 'LIL', email: 'LIL@gmail.com', password: 'Cybersentinel@nonLIL', day: 'DAY_2', type: 'TEAM' },
-  { event: 'Thiruvizha Corner', code: 'TC', email: 'TC@gmail.com', password: 'Cybersentinel@nonTC', day: 'DAY_2', type: 'TEAM' }
+  { event: 'Lost in Lyrics', code: 'LIL', email: 'LIL@gmail.com', password: 'Cybersentinel@nonLIL', day: 'DAY_2', type: 'TEAM' }
 ];
 
 // pgcrypto's crypt() (used by public.coordinator_login) only verifies $2a$ bcrypt

@@ -23,6 +23,11 @@ import {
 } from '../../utils/dashboardMetrics';
 import { formatCurrency } from '../../utils/helpers';
 import {
+  getNonTechEvents,
+  countSelectionsByEvent,
+  buildSegments,
+} from '../../config/events';
+import {
   Users,
   CheckCircle2,
   Hourglass,
@@ -169,24 +174,22 @@ export default function AdminDashboard() {
     { tech: 0, nonTech: 0, both: 0, special: 0 }
   );
 
-  const day1TechCount = Number(regSum.day_1_registrations ?? countByCategory.tech ?? trackCounts.day1);
-  const day2NonTechCount = Number(regSum.day_2_registrations ?? countByCategory.nonTech ?? trackCounts.day2);
-  const bothDayCount = Number(regSum.both_day_registrations ?? countByCategory.both ?? trackCounts.both);
-  const specialTracksCount = Number(trackCounts.special ?? countByCategory.special);
+  const day1TechCount = Math.max(Number(regSum.day_1_registrations || 0), countByCategory.tech);
+  const day2NonTechCount = Math.max(Number(regSum.day_2_registrations || 0), countByCategory.nonTech);
+  const bothDayCount = Math.max(Number(regSum.both_day_registrations || 0), countByCategory.both);
+  const specialTracksCount = Math.max(Number(trackCounts.special || 0), countByCategory.special);
 
-  const day1Pct = percentageOf(day1TechCount, totalRegistrations);
-  const day2Pct = percentageOf(day2NonTechCount, totalRegistrations);
-  const bothDayPct = percentageOf(bothDayCount, totalRegistrations);
-  const specialPct = percentageOf(specialTracksCount, totalRegistrations);
+  // daySplitTotal = number of registrations that fall in at least one category bucket.
+  // Using this (instead of totalRegistrations from the DB view) guarantees the donut
+  // center always matches the sum of what is actually drawn on the arc.
+  const daySplitTotal = registrations.filter((r) => {
+    const selDay = String(r?.selected_day || '').toUpperCase();
+    const evRegs = r.selected_event_registrations || r.event_registrations || [];
+    const spRegs = r.special_event_registrations || [];
+    return selDay || evRegs.length > 0 || spRegs.length > 0;
+  }).length || totalRegistrations;
+
   const registrationTrend = buildRegistrationTrend(registrations);
-
-  // Donut chart event distribution segments calculated from live database with ultra-distinct colors
-  const donutSegments = [
-    { label: 'Technical Events (Day 1)', count: day1TechCount, percentage: day1Pct, color: '#00f0ff' },
-    { label: 'Non-Technical (Day 2)', count: day2NonTechCount, percentage: day2Pct, color: '#f59e0b' },
-    { label: 'Both Tracks (Tech + Non-Tech)', count: bothDayCount, percentage: bothDayPct, color: '#a855f7' },
-    { label: 'Special Tracks / Workshops', count: specialTracksCount, percentage: specialPct, color: '#10b981' },
-  ].filter((s) => s.count > 0 || totalRegistrations === 0);
 
   const canonicalDay1Events = [
     { id: 'PP', code: 'PP', name: 'Paper Presentation', day: 'DAY_1' },
@@ -294,91 +297,59 @@ export default function AdminDashboard() {
     };
   });
 
-  const canonicalNonTechEvents = [
-    { id: 'GD', code: 'GD', name: 'Group Dance', day: 'DAY_2' },
-    { id: 'SP', code: 'SP', name: 'Stage Play', day: 'DAY_2' },
-    { id: 'CO', code: 'CO', name: 'Connections', day: 'DAY_2' },
-    { id: 'FTB', code: 'FTB', name: 'Football', day: 'DAY_2' },
-    { id: 'MS', code: 'MS', name: 'Mystic Signals', day: 'DAY_2' },
-    { id: 'LIL', code: 'LIL', name: 'LIL', day: 'DAY_2' },
-    { id: 'TC', code: 'TC', name: 'Turf Challenge', day: 'DAY_2' },
+  // The display list is deliberately independent of legacy database rows.
+  // Rows such as Football or a second Connections record may still exist in
+  // the database, but may never become their own dashboard segment.
+  const finalNonTechEvents = getNonTechEvents();
+  const nonTechSelections = registrations.flatMap((registration) =>
+    (registration.selected_event_registrations || registration.event_registrations || [])
+      .filter((selection) => selection?.active !== false)
+  );
+  const { counts: nonTechCounts, total: totalNonTechRegistrations } = countSelectionsByEvent(
+    finalNonTechEvents,
+    nonTechSelections,
+    allEvents
+  );
+  const nonTechSegments = buildSegments(
+    finalNonTechEvents,
+    nonTechCounts,
+    totalNonTechRegistrations,
+    distinctColors
+  );
+
+  const canonicalSpecialEvents = [
+    { id: '3546a79b-ca1b-4d3b-8f04-bdd71b9bd9d9', code: 'TC', name: 'Thiruvizha Corner(Food Stall)', fee: 590 },
+    { id: '01524e69-6f8d-42b7-933e-6f4121681402', code: 'EP', name: 'Esports(Free Fire)', fee: 170 },
+    { id: 'f1420ddb-a778-4cd7-a93e-0e5e984af5c4', code: 'GD', name: 'Group Dance', fee: 500 },
   ];
 
-  const systemNonTechEvents = dedupeByCode([
-    ...allEvents,
-    ...canonicalNonTechEvents,
-  ]).filter((event) => event.day === 'DAY_2' || event.day === 'BOTH' || event.day === 'ALL' || !event.day);
-  const finalNonTechEvents = systemNonTechEvents.length ? systemNonTechEvents : canonicalNonTechEvents;
+  const allSpecialEventsCombined = dedupeByCode([
+    ...(specialEvents || []),
+    ...canonicalSpecialEvents,
+  ]);
 
-  const nonTechCounts = new Map();
-  finalNonTechEvents.forEach((ev) => nonTechCounts.set(eventCountKey(ev), 0));
+  const totalSegments = [
+    { label: 'Tech Events', count: day1TechCount, percentage: percentageOf(day1TechCount, daySplitTotal), color: '#00f0ff' },
+    { label: 'Non-Tech Events', count: day2NonTechCount, percentage: percentageOf(day2NonTechCount, daySplitTotal), color: '#f59e0b' },
+    { label: 'Both Days', count: bothDayCount, percentage: percentageOf(bothDayCount, daySplitTotal), color: '#a855f7' },
+    { label: 'Special Events', count: specialTracksCount, percentage: percentageOf(specialTracksCount, daySplitTotal), color: '#10b981' },
+  ];
 
-  registrations.forEach((regItem) => {
-    const selections = regItem.selected_event_registrations || regItem.event_registrations || [];
-    let matched = false;
+  const specialSegments = allSpecialEventsCombined.map((event, index) => {
+    const matchingCount = registrations.filter((regItem) => (regItem.special_event_registrations || []).some((specialReg) => {
+      const target = specialReg.special_events || specialReg;
+      const targetStr = String(target?.id || target?.code || target?.name || '').toLowerCase();
+      const eventStr = String(event.id || event.code || event.name || '').toLowerCase();
+      return targetStr === eventStr || (event.code && targetStr.includes(event.code.toLowerCase()));
+    })).length;
 
-    selections.forEach((reg) => {
-      if (reg?.active === false) return;
-      const matchedEvent = locateEventMatch(reg.events || reg, finalNonTechEvents);
-      if (matchedEvent) {
-        const key = eventCountKey(matchedEvent);
-        nonTechCounts.set(key, (nonTechCounts.get(key) || 0) + 1);
-        matched = true;
-      }
-    });
-
-    if (!matched) {
-      const day = regItem.event_day || regItem.registration_type || regItem.selected_day;
-      if (day === 'DAY_2' || day === 'BOTH' || day === 'ALL') {
-        const firstEv = finalNonTechEvents[0];
-        if (firstEv) {
-          const key = eventCountKey(firstEv);
-          nonTechCounts.set(key, (nonTechCounts.get(key) || 0) + 1);
-        }
-      }
-    }
-  });
-
-  const totalNonTechRegistrations = Array.from(nonTechCounts.values()).reduce((a, b) => a + b, 0);
-
-  const nonTechSegments = finalNonTechEvents.map((ev, index) => {
-    const count = nonTechCounts.get(eventCountKey(ev)) || 0;
     return {
-      label: ev.name,
-      count,
-      percentage: percentageOf(count, totalNonTechRegistrations),
+      label: event.name,
+      count: matchingCount,
+      percentage: percentageOf(matchingCount, Math.max(1, specialTracksCount || registrations.length)),
       color: distinctColors[index % distinctColors.length],
     };
   });
-
-  const totalSegments = [
-    { label: 'Tech Events', count: day1TechCount, percentage: percentageOf(day1TechCount, totalRegistrations), color: '#00f0ff' },
-    { label: 'Non-Tech Events', count: day2NonTechCount, percentage: percentageOf(day2NonTechCount, totalRegistrations), color: '#f59e0b' },
-    { label: 'Both Days', count: bothDayCount, percentage: percentageOf(bothDayCount, totalRegistrations), color: '#a855f7' },
-    { label: 'Special Events', count: specialTracksCount, percentage: percentageOf(specialTracksCount, totalRegistrations), color: '#10b981' },
-  ].filter((segment) => segment.count > 0 || totalRegistrations === 0);
-
-  const specialSegments = dedupeByCode((specialEvents || []).map((event) => ({
-    ...event,
-    id: event.id,
-    code: event.code || event.name,
-    name: event.name,
-    day: 'SPECIAL',
-  }))).map((event, index) => ({
-    label: event.name,
-    count: registrations.filter((regItem) => (regItem.special_event_registrations || []).some((specialReg) => {
-      const target = specialReg.special_events || specialReg;
-      return String(target?.id || target?.code || target?.name || '').toLowerCase() === String(event.id || event.code || event.name || '').toLowerCase();
-    })).length,
-    percentage: percentageOf(
-      registrations.filter((regItem) => (regItem.special_event_registrations || []).some((specialReg) => {
-        const target = specialReg.special_events || specialReg;
-        return String(target?.id || target?.code || target?.name || '').toLowerCase() === String(event.id || event.code || event.name || '').toLowerCase();
-      })).length,
-      Math.max(1, specialTracksCount || registrations.length)
-    ),
-    color: distinctColors[index % distinctColors.length],
-  })).filter((segment) => segment.count > 0 || specialTracksCount === 0);
 
   const chartConfig = {
     TECH_BREAKDOWN: {
@@ -399,7 +370,7 @@ export default function AdminDashboard() {
       title: 'Day Split & Event Mix',
       subtitle: 'Tech, Non-Tech, both-day and special-event comparison across the symposium',
       segments: totalSegments,
-      totalCount: totalRegistrations,
+      totalCount: daySplitTotal,
       totalLabel: 'Total Reg',
     },
     SPECIAL_BREAKDOWN: {

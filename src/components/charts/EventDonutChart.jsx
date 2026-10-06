@@ -71,11 +71,11 @@ export default function EventDonutChart({
     >
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex-1 min-w-0 text-left">
-          <h3 className="text-3xl sm:text-4xl lg:text-[2.2rem] font-black font-heading text-white leading-none tracking-tight text-left">
+          <h3 className="text-xl sm:text-2xl font-black font-heading text-white leading-tight tracking-tight text-left">
             {title}
           </h3>
           {subtitle && (
-            <p className="mt-2 text-sm sm:text-lg text-slate-300 font-medium max-w-[440px] leading-snug text-left">
+            <p className="mt-1.5 text-xs sm:text-sm text-slate-300 font-medium max-w-[440px] leading-snug text-left">
               {subtitle}
             </p>
           )}

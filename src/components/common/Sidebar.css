@@ -44,7 +44,7 @@
 
 @media (min-width: 1024px) {
   .cs-main {
-    width: calc(100vw - var(--cs-sidebar-w));
+    width: calc(100% - var(--cs-sidebar-w));
     margin-left: var(--cs-sidebar-w);
   }
 }

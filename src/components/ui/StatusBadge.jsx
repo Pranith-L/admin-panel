@@ -14,7 +14,7 @@ export function StatusBadge({ status = '' }) {
     );
   }
 
-  if (['PENDING', 'PENDING_VERIFICATION', 'UNDER_REVIEW', 'REVIEW', 'OPEN'].includes(s)) {
+  if (['PENDING', 'PAYMENT_PENDING', 'PENDING_VERIFICATION', 'UNDER_REVIEW', 'REVIEW', 'OPEN'].includes(s)) {
     return (
       <span className="pill-pending">
         <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_#fbbf24]"></span>

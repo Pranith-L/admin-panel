@@ -1,13 +1,11 @@
 export function getChartRegistrationSource({ allEventParticipants = [], participants = [], allDbEvents = [] }) {
-  // Always prefer the full registrations list if available
   if (Array.isArray(allEventParticipants) && allEventParticipants.length > 0) {
     return allEventParticipants;
   }
 
-  // Fall back to coordinator-scoped participants regardless of whether DB events loaded
-  if (Array.isArray(participants) && participants.length > 0) {
-    return participants;
-  }
-
-  return [];
+  // A coordinator can read the event catalogue even when the global
+  // registration query is blocked by row-level permissions. In that case the
+  // assigned participant list is still valid chart data; returning an empty
+  // list made production donuts render as zero despite visible registrations.
+  return Array.isArray(participants) ? participants : [];
 }

@@ -7,6 +7,7 @@ import {
 } from '../../services/coordinatorService';
 import StatusBadge from '../../components/ui/StatusBadge';
 import DetailsModal from '../../components/common/DetailsModal';
+import { buildTeamConfirmationGmailLink } from '../../utils/helpers';
 import {
   Users,
   Search,
@@ -70,11 +71,19 @@ export default function CoordinatorTeams() {
     return new Set(assignedEvents.map((e) => e.id));
   }, [assignedEvents]);
 
+  const assignedEventCodes = useMemo(() => {
+    return new Set(assignedEvents.map((e) => (e.code || '').toUpperCase()));
+  }, [assignedEvents]);
+
   const filtered = useMemo(() => {
     return teams.filter((t) => {
-      // Must belong to one of the coordinator's assigned events unless coordinator has full access
-      if (assignedEventIds.size > 0 && !assignedEventIds.has(t.event_id)) {
-        return false;
+      // Must belong to one of the coordinator's assigned events unless coordinator has no specific event filter
+      if (assignedEventIds.size > 0) {
+        const matchesById = t.event_id && assignedEventIds.has(t.event_id);
+        const matchesByCode = t.event_code && assignedEventCodes.has((t.event_code || '').toUpperCase());
+        if (!matchesById && !matchesByCode) {
+          return false;
+        }
       }
 
       const q = search.trim().toLowerCase();
@@ -98,11 +107,14 @@ export default function CoordinatorTeams() {
         memberMatch;
 
       const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
-      const matchesEvent = eventFilter === 'ALL' || t.event_id === eventFilter;
+      const matchesEvent =
+        eventFilter === 'ALL' ||
+        t.event_id === eventFilter ||
+        (t.event_code || '').toUpperCase() === (eventFilter || '').toUpperCase();
 
       return matchesSearch && matchesStatus && matchesEvent;
     });
-  }, [teams, assignedEventIds, search, statusFilter, eventFilter]);
+  }, [teams, assignedEventIds, assignedEventCodes, search, statusFilter, eventFilter]);
 
   return (
     <div className="space-y-6">
@@ -322,13 +334,25 @@ export default function CoordinatorTeams() {
                         <StatusBadge status={team.status} />
                       </td>
                       <td className="text-right whitespace-nowrap">
-                        <button
-                          onClick={() => setSelectedTeam(team)}
-                          className="btn-ghost text-xs inline-flex items-center gap-1.5 py-1 px-2.5"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-brand-cyan" />
-                          View
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <a
+                            href={buildTeamConfirmationGmailLink(team)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-ghost text-xs inline-flex items-center gap-1.5 py-1 px-2.5 text-brand-cyan hover:bg-brand-cyan/10"
+                            title="Email Team Leader QR Passes"
+                          >
+                            <Mail className="w-3.5 h-3.5 text-brand-cyan" />
+                            Email Team
+                          </a>
+                          <button
+                            onClick={() => setSelectedTeam(team)}
+                            className="btn-ghost text-xs inline-flex items-center gap-1.5 py-1 px-2.5"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-brand-cyan" />
+                            View
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

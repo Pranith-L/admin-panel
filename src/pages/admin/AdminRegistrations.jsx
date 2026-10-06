@@ -28,6 +28,23 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 
+function getPaymentDisplay(record = {}) {
+  const payment = Array.isArray(record.payments) ? record.payments.find(Boolean) : record.payments;
+  const status = String(payment?.status || record.payment_status || record.status || 'PENDING').toUpperCase();
+
+  if (status === 'VERIFIED' || status === 'CONFIRMED') {
+    return { label: 'Paid', color: 'text-emerald-400', dot: 'bg-emerald-400' };
+  }
+  if (status === 'REJECTED' || status === 'CANCELLED') {
+    return { label: 'Rejected', color: 'text-rose-400', dot: 'bg-rose-400' };
+  }
+  if (status === 'UNDER_REVIEW') {
+    return { label: 'Under Review', color: 'text-amber-400', dot: 'bg-amber-400' };
+  }
+
+  return { label: 'Pending', color: 'text-amber-400', dot: 'bg-amber-400' };
+}
+
 export default function AdminRegistrations() {
   const { addToast } = useToast();
   const [registrations, setRegistrations] = useState([]);
@@ -172,6 +189,8 @@ export default function AdminRegistrations() {
     ]);
     addToast('Participant details exported', 'success');
   };
+
+  const selectedPayment = getPaymentDisplay(selectedParticipant || {});
 
   return (
     <div className="space-y-6">
@@ -591,9 +610,9 @@ export default function AdminRegistrations() {
 
                   <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
                     <span className="text-slate-500 block mb-1">Payment Status</span>
-                    <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-400">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                      Paid
+                    <span className={`inline-flex items-center gap-1.5 font-semibold ${selectedPayment.color}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${selectedPayment.dot}`}></span>
+                      {selectedPayment.label}
                     </span>
                   </div>
                 </div>

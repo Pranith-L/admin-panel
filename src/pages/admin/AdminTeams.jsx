@@ -4,6 +4,7 @@ import { StatusBadge } from '../../components/ui/StatusBadge';
 import { Modal } from '../../components/common/Modal';
 import { DetailsModal } from '../../components/common/DetailsModal';
 import { useToast } from '../../context/ToastContext';
+import { buildTeamConfirmationGmailLink } from '../../utils/helpers';
 import { Users2, Plus, Eye, RefreshCw, ShieldCheck, Phone, Mail, Crown, User } from 'lucide-react';
 
 export function AdminTeams() {
@@ -223,14 +224,26 @@ export function AdminTeams() {
                   </td>
 
                   <td style={{ textAlign: 'right' }}>
-                    <button
-                      type="button"
-                      onClick={() => setActiveDetails(t)}
-                      className="btn btn-secondary"
-                      style={{ padding: '7px 14px', fontSize: '0.85rem' }}
-                    >
-                      <Eye size={14} /> View
-                    </button>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }}>
+                      <a
+                        href={buildTeamConfirmationGmailLink(t)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-secondary"
+                        style={{ padding: '7px 12px', fontSize: '0.85rem', background: 'rgba(0, 240, 255, 0.12)', borderColor: 'rgba(0, 240, 255, 0.4)', color: '#00f0ff' }}
+                        title="Email Team Leader QR Passes"
+                      >
+                        <Mail size={14} /> Email Team
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setActiveDetails(t)}
+                        className="btn btn-secondary"
+                        style={{ padding: '7px 14px', fontSize: '0.85rem' }}
+                      >
+                        <Eye size={14} /> View
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

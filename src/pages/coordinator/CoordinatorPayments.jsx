@@ -7,7 +7,7 @@ import {
 } from '../../services/coordinatorService';
 import { subscribeToRealtimeUpdates } from '../../utils/statusStore';
 import DetailsModal from '../../components/common/DetailsModal';
-import { formatCurrency, formatDate } from '../../utils/helpers';
+import { formatCurrency, formatDate, buildPaymentConfirmationGmailLink, buildPendingPaymentGmailLink } from '../../utils/helpers';
 import {
   CreditCard,
   Search,
@@ -20,22 +20,6 @@ import {
   Layers,
   Mail,
 } from 'lucide-react';
-
-const buildPendingPaymentGmailLink = (email, participantName = 'Participant') => {
-  const subject = 'Payment Pending - Complete Your Registration';
-  const body = [
-    `Hello ${participantName || 'Participant'},`,
-    '',
-    'Your payment has not been completed yet. Kindly complete it to finalize your registration.',
-    'Welcome to our event. You have already registered, but your payment has not yet been completed. Kindly pay the required amount to enroll in our event.',
-    '',
-    'Thank you,',
-    'Cyber Sentinel Team',
-  ].join('\n');
-
-  const to = email || '';
-  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-};
 
 export default function CoordinatorPayments() {
   const { user, coordinatorProfile, getCoordinatorClientInstance } = useAuth();
@@ -287,17 +271,30 @@ export default function CoordinatorPayments() {
                       </td>
                       <td className="py-5 px-6 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2.5">
-                          {!['VERIFIED', 'REJECTED'].includes(payment.status) && part.email ? (
-                            <a
-                              href={buildPendingPaymentGmailLink(part.email, part.name)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 rounded-xl bg-amber-500/15 border border-amber-400/40 px-3 py-2 text-xs font-extrabold text-amber-300 hover:bg-amber-500/20 transition-colors"
-                              title="Email participant"
-                            >
-                              <Mail className="w-4 h-4" />
-                              Email
-                            </a>
+                          {part.email ? (
+                            payment.status === 'VERIFIED' ? (
+                              <a
+                                href={buildPaymentConfirmationGmailLink(payment)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/15 border border-emerald-400/40 px-3 py-2 text-xs font-extrabold text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+                                title="Send Confirmation Email & Entry Pass"
+                              >
+                                <Mail className="w-4 h-4" />
+                                Email Pass
+                              </a>
+                            ) : (
+                              <a
+                                href={buildPendingPaymentGmailLink(payment)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 rounded-xl bg-amber-500/15 border border-amber-400/40 px-3 py-2 text-xs font-extrabold text-amber-300 hover:bg-amber-500/20 transition-colors"
+                                title="Send Payment Reminder Email"
+                              >
+                                <Mail className="w-4 h-4" />
+                                Email
+                              </a>
+                            )
                           ) : null}
                           <button
                             onClick={() => setSelectedDetails(payment)}

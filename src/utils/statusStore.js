@@ -64,7 +64,9 @@ export function normalizeRegistrationStatus(record = {}) {
 
   if (paymentStatus === 'VERIFIED' || paymentStatus === 'CONFIRMED') return 'VERIFIED';
   if (paymentStatus === 'REJECTED' || paymentStatus === 'CANCELLED') return 'REJECTED';
-  if (paymentStatus === 'PENDING' || paymentStatus === 'PAYMENT_PENDING') return 'PAYMENT_PENDING';
+  if (['PENDING', 'PAYMENT_PENDING', 'PENDING_VERIFICATION', 'UNDER_REVIEW'].includes(paymentStatus)) {
+    return 'PAYMENT_PENDING';
+  }
 
   if (rawStatus === 'VERIFIED' || rawStatus === 'CONFIRMED') return 'VERIFIED';
   if (rawStatus === 'REJECTED' || rawStatus === 'CANCELLED') return 'REJECTED';

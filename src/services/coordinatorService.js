@@ -13,13 +13,11 @@ export const KNOWN_COORDINATOR_ASSIGNMENTS = {
   'CC@gmail.com': [{ id: 'CC', code: 'CC', name: 'Cipher Coding', day: 'DAY_1', event_type: 'INDIVIDUAL', venue: 'Main Auditorium' }],
   'WE@gmail.com': [{ id: 'WE', code: 'WE', name: 'Weblica', day: 'DAY_1', event_type: 'TEAM', venue: 'Main Auditorium' }],
   'XC@gmail.com': [{ id: 'XC', code: 'XC', name: 'Xcoders', day: 'DAY_1', event_type: 'INDIVIDUAL', venue: 'Main Auditorium' }],
-  'GD@gmail.com': [{ id: 'GD', code: 'GD', name: 'Group Dance', day: 'DAY_2', event_type: 'TEAM', venue: 'Main Auditorium' }],
   'SP@gmail.com': [{ id: 'SP', code: 'SP', name: 'Spotlight', day: 'DAY_2', event_type: 'INDIVIDUAL', venue: 'Main Auditorium' }],
   'CO@gmail.com': [{ id: 'CO', code: 'CO', name: 'Connections', day: 'DAY_2', event_type: 'TEAM', venue: 'Main Auditorium' }],
   'FTB@gmail.com': [{ id: 'FTB', code: 'FTB', name: 'Find the BGM', day: 'DAY_2', event_type: 'TEAM', venue: 'Main Auditorium' }],
   'MS@gmail.com': [{ id: 'MS', code: 'MS', name: 'Mixed Signals', day: 'DAY_2', event_type: 'TEAM', venue: 'Main Auditorium' }],
   'LIL@gmail.com': [{ id: 'LIL', code: 'LIL', name: 'Lost in Lyrics', day: 'DAY_2', event_type: 'TEAM', venue: 'Main Auditorium' }],
-  'TC@gmail.com': [{ id: 'TC', code: 'TC', name: 'Thiruvizha Corner', day: 'DAY_2', event_type: 'TEAM', venue: 'Main Auditorium' }],
 };
 
 export function getKnownCoordinatorAssignmentsById(coordinatorId) {
@@ -368,6 +366,16 @@ export async function getCoordinatorTeams(client) {
 
   return await Promise.all(
     (data || []).map(async (team) => {
+      let eventId = team.event_id;
+      if (!eventId && team.id) {
+        const { data: et } = await client
+          .from('event_teams')
+          .select('event_id')
+          .eq('id', team.id)
+          .maybeSingle();
+        if (et?.event_id) eventId = et.event_id;
+      }
+
       const { data: members } = await client
         .from('team_members')
         .select('member_role, registrations(registration_code, participants(name, phone, email))')
@@ -375,6 +383,7 @@ export async function getCoordinatorTeams(client) {
 
       return {
         ...team,
+        event_id: eventId,
         team_members: (members || []).map((m) => ({
           role: m.member_role,
           cs_id: m.registrations?.registration_code,

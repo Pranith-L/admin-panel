@@ -4,7 +4,7 @@ import { useToast } from '../../context/ToastContext';
 import { getPayments } from '../../services/adminService';
 import { subscribeToRealtimeUpdates } from '../../utils/statusStore';
 import { DetailsModal } from '../../components/common/DetailsModal';
-import { formatCurrency } from '../../utils/helpers';
+import { formatCurrency, buildPaymentConfirmationGmailLink, buildPendingPaymentGmailLink } from '../../utils/helpers';
 import {
   Search,
   Eye,
@@ -14,22 +14,6 @@ import {
   X,
   Mail,
 } from 'lucide-react';
-
-const buildPendingPaymentGmailLink = (email, participantName = 'Participant') => {
-  const subject = 'Payment Pending - Complete Your Registration';
-  const body = [
-    `Hello ${participantName || 'Participant'},`,
-    '',
-    'Your payment has not been completed yet. Kindly complete it to finalize your registration.',
-    'Welcome to our event. You have already registered, but your payment has not yet been completed. Kindly pay the required amount to enroll in our event.',
-    '',
-    'Thank you,',
-    'Cyber Sentinel Team',
-  ].join('\n');
-
-  const to = email || '';
-  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-};
 
 export function AdminPayments() {
   const { adminProfile } = useAuth();
@@ -251,18 +235,32 @@ export function AdminPayments() {
 
                     <td style={{ padding: '18px 22px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        {!['VERIFIED', 'REJECTED'].includes(p.status) && part.email ? (
-                          <a
-                            href={buildPendingPaymentGmailLink(part.email, part.name)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-secondary"
-                            style={{ padding: '9px 13px', fontSize: '0.92rem', background: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245, 158, 11, 0.5)', color: '#fbbf24' }}
-                            title="Email participant"
-                          >
-                            <Mail size={16} />
-                            Email
-                          </a>
+                        {part.email ? (
+                          p.status === 'VERIFIED' ? (
+                            <a
+                              href={buildPaymentConfirmationGmailLink(p)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-secondary"
+                              style={{ padding: '9px 13px', fontSize: '0.92rem', background: 'rgba(16, 185, 129, 0.15)', borderColor: 'rgba(16, 185, 129, 0.5)', color: '#34d399' }}
+                              title="Send Confirmation Email & Entry Pass"
+                            >
+                              <Mail size={16} />
+                              Email Pass
+                            </a>
+                          ) : (
+                            <a
+                              href={buildPendingPaymentGmailLink(p)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-secondary"
+                              style={{ padding: '9px 13px', fontSize: '0.92rem', background: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245, 158, 11, 0.5)', color: '#fbbf24' }}
+                              title="Send Payment Reminder Email"
+                            >
+                              <Mail size={16} />
+                              Email
+                            </a>
+                          )
                         ) : null}
                         <button
                           type="button"

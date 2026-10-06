@@ -120,43 +120,24 @@ export function AuthProvider({ children }) {
       throw new Error('Invalid administrator credentials.');
     }
 
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: cleanPassword,
-      });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password: cleanPassword,
+    });
 
-      if (!error && data?.user) {
-        const profile = await fetchAdminProfile(data.user.id);
-        if (profile) {
-          setAdminSession(data.session);
-          setAdminProfile(profile);
-          return profile;
-        }
-      }
-    } catch (authErr) {
-      console.warn('Supabase Auth error, checking demo credentials:', authErr);
+    if (error) {
+      console.error('Supabase Auth error:', error);
+      throw error;
     }
 
-    // Demo admin fallback for immediate development / review testing
-    if (
-      cleanEmail === 'admin@cybersentinel.in' &&
-      (cleanPassword === 'Cybersentinel@admin' || cleanPassword === 'admin123' || cleanPassword === 'password123' || cleanPassword === 'admin')
-    ) {
-      const mockProfile = {
-        id: '00000000-0000-0000-0000-000000000000',
-        name: 'Super Administrator',
-        email: 'admin@cybersentinel.in',
-        role: 'ADMIN',
-        active: true,
-      };
-      const mockSession = {
-        user: { id: mockProfile.id, email: mockProfile.email },
-        access_token: 'mock-admin-token',
-      };
-      setAdminSession(mockSession);
-      setAdminProfile(mockProfile);
-      return mockProfile;
+    if (data?.user) {
+      const profile = await fetchAdminProfile(data.user.id);
+      if (profile) {
+        setAdminSession(data.session);
+        setAdminProfile(profile);
+        return profile;
+      }
+      throw new Error('User does not have active administrator permissions.');
     }
 
     throw new Error('Invalid administrator credentials.');

@@ -97,3 +97,139 @@ export function downloadCsv(filename, rows) {
   link.click();
   URL.revokeObjectURL(link.href);
 }
+
+export function buildPaymentConfirmationGmailLink(payment) {
+  const reg = payment.registrations || {};
+  const part = reg.participants || payment.participants || {};
+  const email = part.email || payment.email || '';
+  const name = part.name || payment.name || 'Participant';
+  const code = reg.registration_code || payment.registration_code || '—';
+  const eventLabel = payment.special_event_label || payment.event_label || reg.selected_day || 'CyberSentinel 2K26';
+
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://cybersentinel.in';
+  const passLink = `${baseUrl}/check?code=${encodeURIComponent(code)}`;
+
+  const subject = `CyberSentinel 2K26 - Payment Confirmed & Digital Entry Pass (${code})`;
+  const body = [
+    `Dear ${name},`,
+    '',
+    `We are pleased to inform you that your payment of ${formatCurrency(payment.amount || 0)} for CyberSentinel 2K26 has been verified and your registration is officially CONFIRMED!`,
+    '',
+    `📋 REGISTRATION DETAILS:`,
+    `• Registration Code: ${code}`,
+    `• Event / Track: ${eventLabel}`,
+    `• Status: Verified & Confirmed`,
+    `• Transaction ID / UTR: ${payment.transaction_id || payment.utr || 'Verified'}`,
+    '',
+    `🎟️ OFFICIAL DIGITAL ENTRY PASS LINK:`,
+    `${passLink}`,
+    '',
+    `Please present this digital pass or QR code at the entrance gate and event check-in counters.`,
+    '',
+    `We look forward to seeing you at CyberSentinel 2K26!`,
+    '',
+    `Warm regards,`,
+    `CyberSentinel 2K26 Organizing Committee`,
+    `Vel Tech High Tech Dr. Rangarajan Dr. Sakunthala Engineering College`,
+  ].join('\n');
+
+  const url = new URL('https://mail.google.com/mail/');
+  url.searchParams.set('view', 'cm');
+  url.searchParams.set('fs', '1');
+  if (email) url.searchParams.set('to', email);
+  url.searchParams.set('su', subject);
+  url.searchParams.set('body', body);
+  return url.toString();
+}
+
+export function buildPendingPaymentGmailLink(paymentOrEmail, participantNameArg = 'Participant') {
+  let email = '';
+  let name = 'Participant';
+  let code = '—';
+  let eventLabel = 'CyberSentinel 2K26';
+
+  if (typeof paymentOrEmail === 'object' && paymentOrEmail !== null) {
+    const reg = paymentOrEmail.registrations || {};
+    const part = reg.participants || paymentOrEmail.participants || {};
+    email = part.email || paymentOrEmail.email || '';
+    name = part.name || paymentOrEmail.name || 'Participant';
+    code = reg.registration_code || paymentOrEmail.registration_code || '—';
+    eventLabel = paymentOrEmail.special_event_label || paymentOrEmail.event_label || reg.selected_day || 'CyberSentinel 2K26';
+  } else {
+    email = String(paymentOrEmail || '');
+    name = participantNameArg;
+  }
+
+  const subject = `Payment Pending - Complete Your CyberSentinel 2K26 Registration (${code})`;
+  const body = [
+    `Dear ${name},`,
+    '',
+    `Your registration payment for CyberSentinel 2K26 (${eventLabel}) is currently pending or awaiting verification.`,
+    '',
+    `• Registration Code: ${code}`,
+    `• Event / Track: ${eventLabel}`,
+    '',
+    `Kindly complete your payment transaction and verify your status on the portal to reserve your official entry pass.`,
+    '',
+    `If you have already submitted your payment details, our admin team is reviewing your verification proof.`,
+    '',
+    `Warm regards,`,
+    `CyberSentinel 2K26 Organizing Committee`,
+    `Vel Tech High Tech College`,
+  ].join('\n');
+
+  const url = new URL('https://mail.google.com/mail/');
+  url.searchParams.set('view', 'cm');
+  url.searchParams.set('fs', '1');
+  if (email) url.searchParams.set('to', email);
+  url.searchParams.set('su', subject);
+  url.searchParams.set('body', body);
+  return url.toString();
+}
+
+export function buildTeamConfirmationGmailLink(team) {
+  const members = team.team_members || [];
+  const leader = members.find((m) => m.role === 'LEADER') || members[0] || {};
+  const leaderEmail = leader.email || team.team_leader_email || '';
+  const leaderName = leader.name || team.team_leader_name || 'Team Leader';
+  const teamName = team.team_name || 'Team';
+  const teamCode = team.team_code || '—';
+  const eventName = team.event_name || team.event_code || 'Event';
+
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://cybersentinel.in';
+
+  const memberPassList = members
+    .map((m, idx) => {
+      const roleStr = m.role === 'LEADER' ? '👑 Leader' : `Member ${idx + 1}`;
+      const nameStr = m.name || 'Participant';
+      const codeStr = m.cs_id || 'N/A';
+      const passUrl = codeStr !== 'N/A' ? `${baseUrl}/check?code=${encodeURIComponent(codeStr)}` : 'N/A';
+      return `${idx + 1}. ${nameStr} (${roleStr} - ${codeStr}):\n   Pass: ${passUrl}`;
+    })
+    .join('\n\n');
+
+  const subject = `CyberSentinel 2K26 - Team Confirmation & Entry QR Passes (${teamName} - #${teamCode})`;
+  const body = [
+    `Dear ${leaderName} & Team "${teamName}",`,
+    '',
+    `Congratulations! Your team "${teamName}" (Code: #${teamCode}) is officially registered and confirmed for ${eventName} at CyberSentinel 2K26!`,
+    '',
+    `🎟️ OFFICIAL DIGITAL ENTRY QR PASSES FOR ALL TEAM MEMBERS:`,
+    '',
+    memberPassList || 'Member passes available on portal.',
+    '',
+    `Please ensure all team members save their respective QR pass links for gate entry and event check-in.`,
+    '',
+    `Warm regards,`,
+    `CyberSentinel 2K26 Organizing Committee`,
+    `Vel Tech High Tech College`,
+  ].join('\n');
+
+  const url = new URL('https://mail.google.com/mail/');
+  url.searchParams.set('view', 'cm');
+  url.searchParams.set('fs', '1');
+  if (leaderEmail) url.searchParams.set('to', leaderEmail);
+  url.searchParams.set('su', subject);
+  url.searchParams.set('body', body);
+  return url.toString();
+}
