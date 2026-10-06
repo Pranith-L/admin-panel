@@ -25,11 +25,10 @@ export default function CoordinatorLayout() {
     useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const coordinatorId = coordinatorProfile?.id || user?.id || null;
+  const coordinatorId = coordinatorProfile?.email || coordinatorProfile?.id || user?.id || null;
   const { assignedEvents, primaryEventName, eventsLoading } = useCoordinatorAssignedEvents(
     getCoordinatorClientInstance(),
-    coordinatorId,
-    coordinatorProfile
+    coordinatorId
   );
 
   const navigate = useNavigate();

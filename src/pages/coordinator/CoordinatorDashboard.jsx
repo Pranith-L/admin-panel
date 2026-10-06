@@ -54,7 +54,7 @@ export default function CoordinatorDashboard() {
 
   const client = getCoordinatorClientInstance();
   const navigate = useNavigate();
-  const coordId = coordinatorProfile?.id || user?.id || null;
+  const coordId = coordinatorProfile?.email || coordinatorProfile?.id || user?.id || null;
 
   // Assigned event context is shared with the command-deck header
   const {
@@ -63,7 +63,7 @@ export default function CoordinatorDashboard() {
     primaryEventName,
     eventsLoading,
     refreshEvents,
-  } = useCoordinatorAssignedEvents(client, coordId, coordinatorProfile);
+  } = useCoordinatorAssignedEvents(client, coordId);
 
   const loadData = async () => {
     try {
@@ -195,12 +195,7 @@ export default function CoordinatorDashboard() {
     return selDay || evRegs.length > 0 || spRegs.length > 0;
   }).length || totalRegistrations;
 
-  // For the left-side bars ("Daily Registration Flow"), ONLY show registrations for the logged-in event
-  const effectiveAssignedNormal = (assignedEvents && assignedEvents.length > 0)
-    ? assignedEvents
-    : (coordinatorProfile?.assigned_events && coordinatorProfile.assigned_events.length > 0
-        ? coordinatorProfile.assigned_events
-        : (coordinatorProfile?.event_name ? [{ name: coordinatorProfile.event_name, code: coordinatorProfile.event_code }] : []));
+  const effectiveAssignedNormal = assignedEvents || [];
   const effectiveAssignedSpecial = assignedSpecialEvents || [];
 
   const loggedInEventRegistrations = (registrations || []).filter((reg) => {

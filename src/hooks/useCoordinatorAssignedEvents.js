@@ -9,12 +9,11 @@ const cache = new Map();
  * Used by the command-deck header (assigned event title) and by the dashboard
  * roster / statistics so both always reflect the same coordinator scope.
  */
-export default function useCoordinatorAssignedEvents(client, coordinatorId, coordinatorProfile = null) {
+export default function useCoordinatorAssignedEvents(client, coordinatorId) {
   const clientRef = useRef(client);
   clientRef.current = client;
 
-  const cacheKey = coordinatorProfile?.email || coordinatorId || null;
-  const cachedEntry = cacheKey ? cache.get(cacheKey) : null;
+  const cachedEntry = coordinatorId ? cache.get(coordinatorId) : null;
 
   const [normalEvents, setNormalEvents] = useState(cachedEntry ? cachedEntry.normalEvents : []);
   const [specialEvents, setSpecialEvents] = useState(cachedEntry ? cachedEntry.specialEvents : []);
@@ -22,15 +21,14 @@ export default function useCoordinatorAssignedEvents(client, coordinatorId, coor
 
   const load = useCallback(
     async (force = false) => {
-      if (!coordinatorId && !coordinatorProfile) {
+      if (!coordinatorId) {
         setNormalEvents([]);
         setSpecialEvents([]);
         setEventsLoading(false);
         return { normalEvents: [], specialEvents: [] };
       }
 
-      const key = coordinatorProfile?.email || coordinatorId;
-      const cached = cache.get(key);
+      const cached = cache.get(coordinatorId);
       if (!force && cached && Date.now() - cached.at < CACHE_TTL_MS) {
         setNormalEvents(cached.normalEvents);
         setSpecialEvents(cached.specialEvents);
@@ -40,16 +38,16 @@ export default function useCoordinatorAssignedEvents(client, coordinatorId, coor
 
       setEventsLoading(true);
       try {
-        const result = await getCoordinatorAssignedEvents(clientRef.current, coordinatorId, coordinatorProfile);
+        const result = await getCoordinatorAssignedEvents(clientRef.current, coordinatorId);
         const nextNormal = result.normalEvents || [];
         const nextSpecial = result.specialEvents || [];
-        cache.set(key, { at: Date.now(), normalEvents: nextNormal, specialEvents: nextSpecial });
+        cache.set(coordinatorId, { at: Date.now(), normalEvents: nextNormal, specialEvents: nextSpecial });
         setNormalEvents(nextNormal);
         setSpecialEvents(nextSpecial);
         return { normalEvents: nextNormal, specialEvents: nextSpecial };
       } catch (err) {
         console.warn('Could not load assigned coordinator events:', err);
-        const fallback = cache.get(key);
+        const fallback = cache.get(coordinatorId);
         const safeNormal = fallback ? fallback.normalEvents : [];
         const safeSpecial = fallback ? fallback.specialEvents : [];
         setNormalEvents(safeNormal);
@@ -59,7 +57,7 @@ export default function useCoordinatorAssignedEvents(client, coordinatorId, coor
         setEventsLoading(false);
       }
     },
-    [coordinatorId, coordinatorProfile]
+    [coordinatorId]
   );
 
   useEffect(() => {
