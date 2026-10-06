@@ -111,11 +111,25 @@ export async function getDashboardRegistrations() {
         )
         .order('created_at', { ascending: true });
 
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         list = data;
       }
     } catch (err) {
       console.warn('Dashboard registrations fetch warning:', err);
+    }
+
+    if (!list.length && typeof window !== 'undefined') {
+      try {
+        const response = await fetch('/api/dashboard-registrations');
+        if (response.ok) {
+          const apiData = await response.json();
+          if (Array.isArray(apiData) && apiData.length > 0) {
+            list = apiData;
+          }
+        }
+      } catch (apiErr) {
+        // ignore
+      }
     }
 
     return applyRegistrationOverrides(list);

@@ -24,6 +24,6 @@ pnpm-debug.log*
 *.sw?
 
 .vercel
-__MACOSX
-.firebase
-.temp
+
+__MACOSX/
+.temp/

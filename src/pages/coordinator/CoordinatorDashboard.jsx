@@ -6,12 +6,12 @@ import { useToast } from '../../context/ToastContext';
 import useCoordinatorAssignedEvents from '../../hooks/useCoordinatorAssignedEvents';
 import { getCoordinatorParticipants } from '../../services/coordinatorService';
 import {
-  getAdminSpecialEvents,
   getDashboardSummary,
   getDashboardRegistrations,
+  getAdminSpecialEvents,
   getEvents,
 } from '../../services/adminService';
-import { subscribeToRealtimeUpdates } from '../../utils/statusStore';
+import { applyRegistrationOverrides, subscribeToRealtimeUpdates } from '../../utils/statusStore';
 import RegistrationsBarChart from '../../components/charts/RegistrationsBarChart';
 import EventDonutChart from '../../components/charts/EventDonutChart';
 import {
@@ -46,8 +46,8 @@ export default function CoordinatorDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [summary, setSummary] = useState(null);
-  const [allEvents, setAllEvents] = useState([]);
   const [specialEvents, setSpecialEvents] = useState([]);
+  const [allEvents, setAllEvents] = useState([]);
   const [registrations, setRegistrations] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [chartView, setChartView] = useState('TECH_BREAKDOWN'); // 'TECH_BREAKDOWN' | 'NON_TECH_BREAKDOWN' | 'TOTAL_BREAKDOWN' | 'SPECIAL_BREAKDOWN'
@@ -69,42 +69,56 @@ export default function CoordinatorDashboard() {
     try {
       setRefreshing(true);
 
-      const { normalEvents, specialEvents: coordSpecialEvents } = await refreshEvents();
-
-      // Fetch admin dashboard summary & registrations (same source that powers admin panel pie chart)
-      const [sumData, specialData, registrationData, eventsData, partList] = await Promise.all([
+      const [sumData, specialData, registrationData, eventsData, { normalEvents, specialEvents: coordSpecialEvents }] = await Promise.all([
         getDashboardSummary().catch(() => null),
         getAdminSpecialEvents().catch(() => []),
-        getDashboardRegistrations().catch(async () => {
-          try {
-            const { data, error } = await client
-              .from('registrations')
-              .select(
-                'id, registration_code, selected_day, status, created_at, payments(status), selected_event_registrations(event_id, events(id, code, name, day, event_type)), special_event_registrations(special_event_id, special_events(id, code, name))'
-              )
-              .order('created_at', { ascending: true });
-            if (!error && data && data.length > 0) return data;
-          } catch (err) {
-            console.warn('Coordinator fallback registrations fetch notice:', err);
-          }
-          return [];
-        }),
-        getEvents().catch(async () => {
-          try {
-            const { data } = await client.from('events').select('id, code, name, day, event_type');
-            return data || [];
-          } catch {
-            return [];
-          }
-        }),
-        getCoordinatorParticipants(client, normalEvents, coordSpecialEvents).catch(() => []),
+        getDashboardRegistrations().catch(() => []),
+        getEvents().catch(() => []),
+        refreshEvents().catch(() => ({ normalEvents: [], specialEvents: [] })),
       ]);
+
+      const partList = await getCoordinatorParticipants(client, normalEvents, coordSpecialEvents).catch(() => []);
+
+      let resolvedRegistrations = Array.isArray(registrationData) && registrationData.length > 0 ? registrationData : [];
+
+      if (!resolvedRegistrations.length) {
+        try {
+          const res = await fetch('/api/dashboard-registrations');
+          if (res.ok) {
+            const apiData = await res.json();
+            if (Array.isArray(apiData) && apiData.length > 0) {
+              resolvedRegistrations = applyRegistrationOverrides(apiData);
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!resolvedRegistrations.length) {
+        try {
+          const { data } = await client
+            .from('registrations')
+            .select(
+              'id, registration_code, selected_day, status, created_at, payments(status), selected_event_registrations(event_id, events(id, code, name, day, event_type)), special_event_registrations(special_event_id, special_events(id, code, name))'
+            )
+            .order('created_at', { ascending: true });
+          if (data && data.length > 0) {
+            resolvedRegistrations = applyRegistrationOverrides(data);
+          }
+        } catch (err) {
+          console.warn('Coordinator direct registrations fetch notice:', err);
+        }
+      }
+
+      if (!resolvedRegistrations.length && partList.length > 0) {
+        resolvedRegistrations = partList;
+      }
 
       if (sumData) setSummary(sumData);
       setSpecialEvents(specialData || []);
-      const finalRegs = (registrationData && registrationData.length > 0) ? registrationData : (partList || []);
-      setRegistrations(finalRegs);
-      setAllEvents(eventsData || []);
+      setAllEvents(eventsData && eventsData.length ? eventsData : []);
+      setRegistrations(resolvedRegistrations);
       setParticipants(partList || []);
     } catch (err) {
       console.error('Could not load coordinator dashboard:', err);
@@ -125,23 +139,17 @@ export default function CoordinatorDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Values are derived from the same registration rows that feed the charts.
-  // The database view is retained as a lightweight primary source for the
-  // cards, while the row aggregation is a truthful fallback if that view has
-  // not been deployed yet.
   const regSum = summary?.registrationSummary || summary?.registrations || {};
   const paySum = summary?.paymentSummary || summary?.payments || {};
-  const statusCounts = getRegistrationStatusCounts(participants);
-  const trackCounts = getTrackCounts(participants);
+  const statusCounts = getRegistrationStatusCounts(participants.length ? participants : registrations);
+  const trackCounts = getTrackCounts(registrations.length ? registrations : participants);
 
   const totalCount = statusCounts.total;
   const verifiedCount = statusCounts.verified;
   const pendingCount = statusCounts.pending;
   const rejectedCount = statusCounts.rejected;
 
-  const chartStatusCounts = getRegistrationStatusCounts(registrations);
-  const chartTrackCounts = getTrackCounts(registrations);
-  const totalRegistrations = Number(regSum.total_registrations ?? chartStatusCounts.total);
+  const totalRegistrations = Number(regSum.total_registrations ?? statusCounts.total);
 
   // Each registration choice is a separate segment, so the donut is always
   // an accurate representation of database registrations (including BOTH and
@@ -175,7 +183,7 @@ export default function CoordinatorDashboard() {
   const day1TechCount = Math.max(Number(regSum.day_1_registrations || 0), countByCategory.tech);
   const day2NonTechCount = Math.max(Number(regSum.day_2_registrations || 0), countByCategory.nonTech);
   const bothDayCount = Math.max(Number(regSum.both_day_registrations || 0), countByCategory.both);
-  const specialTracksCount = Math.max(Number(chartTrackCounts.special || 0), countByCategory.special);
+  const specialTracksCount = Math.max(Number(trackCounts.special || 0), countByCategory.special);
 
   // daySplitTotal = number of registrations that fall in at least one category bucket.
   // Using this (instead of totalRegistrations from the DB view) guarantees the donut
@@ -187,7 +195,7 @@ export default function CoordinatorDashboard() {
     return selDay || evRegs.length > 0 || spRegs.length > 0;
   }).length || totalRegistrations;
 
-  const registrationTrend = buildRegistrationTrend(registrations);
+  const registrationTrend = buildRegistrationTrend(registrations.length ? registrations : participants);
 
   const canonicalDay1Events = [
     { id: 'PP', code: 'PP', name: 'Paper Presentation', day: 'DAY_1' },
@@ -421,135 +429,127 @@ export default function CoordinatorDashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Page Header with Real-Time Indicator & Action Buttons */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-mono text-xs font-bold uppercase tracking-wider mb-2">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-            {primaryEventName ? `${primaryEventName} • COORDINATOR CONSOLE` : 'CYBERSENTINEL 2K26 COORDINATOR CONSOLE'}
+      {/* Prominent Assigned Event Banner (Step 7 requirement) */}
+      <div className="cs-event-banner">
+        <div className="flex items-center gap-3.5">
+          <div className="cs-event-banner-badge">
+            <Crosshair className="w-5 h-5 text-[#00f0ff]" />
           </div>
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black font-heading text-white tracking-tight">
-            Dashboard
-          </h1>
-          <p className="text-sm sm:text-base text-slate-300 mt-1.5 font-semibold">
-            Overview of registrations and event management
-          </p>
+          <div>
+            <div className="text-[11px] font-mono font-bold uppercase tracking-[0.16em] text-[#00f0ff]">
+              ASSIGNED EVENT CONSOLE
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black font-heading text-white tracking-tight">
+              {eventsLoading ? 'SYNCING SCOPE...' : (primaryEventName || 'ALL SYMPOSIUM TRACKS')}
+            </h2>
+          </div>
+        </div>
+        {assignedEvents.length > 1 && (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 font-mono text-xs font-semibold">
+            +{assignedEvents.length - 1} additional event{assignedEvents.length > 2 ? 's' : ''}
+          </div>
+        )}
+      </div>
+
+      {/* Page Header: title (left), date + refresh (right) */}
+      <div className="cs-page-head">
+        <div>
+          <h1 className="cs-page-title">Dashboard</h1>
+          <p className="cs-page-subtitle">Overview of registrations and event management</p>
         </div>
 
         {/* Date Range Picker Pill + Refresh */}
-        <div className="flex items-center gap-2.5 self-start sm:self-auto">
-          <div className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-[#0c102a] border border-violet-500/35 text-sm font-mono font-bold text-slate-200 shadow-sm">
+        <div className="flex items-center gap-2.5">
+          <div className="cs-date-pill">
             <Calendar className="w-4 h-4 text-brand-purple" />
             <span>Sep 01, 2026 - Sep 30, 2026</span>
           </div>
 
-          <button
-            onClick={loadData}
-            disabled={refreshing}
-            className="p-2.5 rounded-xl bg-[#0c102a] border border-violet-500/35 text-slate-300 hover:text-white transition-colors"
-            title="Refresh Metrics"
-            style={{ background: '#0c102a' }}
-          >
+          <button onClick={loadData} disabled={refreshing} className="cs-icon-button" title="Refresh Metrics">
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* 4 Stat Cards Matching Mockup with Ultra-Legible Typography */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* 4 Stat Cards — equal width, equal height, shared grid boundaries */}
+      <div className="cs-stat-grid">
         {/* Total Registrations */}
-        <Link to="/coordinator/participants" className="cyber-card-purple block group transition-all p-5 sm:p-6 rounded-2xl">
-          <div className="w-13 h-13 p-3 rounded-2xl bg-purple-500/20 border border-purple-500/50 flex items-center justify-center text-purple-300 shadow-[0_0_18px_rgba(168,85,247,0.3)] group-hover:scale-105 transition-transform inline-flex">
+        <Link to="/coordinator/participants" className="cyber-card-purple cs-stat-card group">
+          <div className="cs-stat-icon is-purple">
             <Users className="w-6 h-6" />
           </div>
-          <div className="mt-4">
+          <div style={{ marginTop: '18px' }}>
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-4xl sm:text-5xl lg:text-6xl font-black font-heading text-white tracking-tight leading-none">
-                {totalCount.toLocaleString()}
-              </span>
-              <span className="inline-flex items-center text-xs sm:text-sm font-black text-emerald-400 font-mono px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40">
+              <span className="cs-stat-value">{totalCount.toLocaleString()}</span>
+              <span className="cs-stat-delta is-up">
                 +12%
               </span>
             </div>
-            <div className="text-base sm:text-lg text-slate-200 mt-3 font-extrabold group-hover:text-white transition-colors">
-              Total Registrations
-            </div>
+            <div className="cs-stat-label">Total Registrations</div>
           </div>
         </Link>
 
         {/* Verified */}
-        <Link to="/coordinator/participants" className="cyber-card-emerald block group transition-all p-5 sm:p-6 rounded-2xl">
-          <div className="w-13 h-13 p-3 rounded-2xl bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-300 shadow-[0_0_18px_rgba(16,185,129,0.3)] group-hover:scale-105 transition-transform inline-flex">
+        <Link to="/coordinator/participants" className="cyber-card-emerald cs-stat-card group">
+          <div className="cs-stat-icon is-emerald">
             <CheckCircle2 className="w-6 h-6" />
           </div>
-          <div className="mt-4">
+          <div style={{ marginTop: '18px' }}>
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-4xl sm:text-5xl lg:text-6xl font-black font-heading text-white tracking-tight leading-none">
-                {verifiedCount.toLocaleString()}
-              </span>
-              <span className="inline-flex items-center text-xs sm:text-sm font-black text-emerald-400 font-mono px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40">
+              <span className="cs-stat-value">{verifiedCount.toLocaleString()}</span>
+              <span className="cs-stat-delta is-up">
                 +8%
               </span>
             </div>
-            <div className="text-base sm:text-lg text-slate-200 mt-3 font-extrabold group-hover:text-white transition-colors">
-              Verified
-            </div>
+            <div className="cs-stat-label">Verified</div>
           </div>
         </Link>
 
         {/* Pending */}
-        <Link to="/coordinator/payments" className="cyber-card-amber block group transition-all p-5 sm:p-6 rounded-2xl">
-          <div className="w-13 h-13 p-3 rounded-2xl bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.3)] group-hover:scale-105 transition-transform inline-flex">
+        <Link to="/coordinator/payments" className="cyber-card-amber cs-stat-card group">
+          <div className="cs-stat-icon is-amber">
             <Hourglass className="w-6 h-6" />
           </div>
-          <div className="mt-4">
+          <div style={{ marginTop: '18px' }}>
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-4xl sm:text-5xl lg:text-6xl font-black font-heading text-white tracking-tight leading-none">
-                {pendingCount.toLocaleString()}
-              </span>
-              <span className="inline-flex items-center text-xs sm:text-sm font-black text-rose-400 font-mono px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/40">
+              <span className="cs-stat-value">{pendingCount.toLocaleString()}</span>
+              <span className="cs-stat-delta is-down">
                 -4%
               </span>
             </div>
-            <div className="text-base sm:text-lg text-slate-200 mt-3 font-extrabold group-hover:text-white transition-colors">
-              Pending
-            </div>
+            <div className="cs-stat-label">Pending</div>
           </div>
         </Link>
 
         {/* Rejected */}
-        <Link to="/coordinator/payments" className="cyber-card-pink block group transition-all p-5 sm:p-6 rounded-2xl">
-          <div className="w-13 h-13 p-3 rounded-2xl bg-pink-500/20 border border-pink-500/50 flex items-center justify-center text-pink-300 shadow-[0_0_18px_rgba(236,72,153,0.3)] group-hover:scale-105 transition-transform inline-flex">
+        <Link to="/coordinator/payments" className="cyber-card-pink cs-stat-card group">
+          <div className="cs-stat-icon is-pink">
             <XCircle className="w-6 h-6" />
           </div>
-          <div className="mt-4">
+          <div style={{ marginTop: '18px' }}>
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-4xl sm:text-5xl lg:text-6xl font-black font-heading text-white tracking-tight leading-none">
-                {rejectedCount.toLocaleString()}
-              </span>
-              <span className="inline-flex items-center text-xs sm:text-sm font-black text-rose-400 font-mono px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/40">
+              <span className="cs-stat-value">{rejectedCount.toLocaleString()}</span>
+              <span className="cs-stat-delta is-down">
                 -2%
               </span>
             </div>
-            <div className="text-base sm:text-lg text-slate-200 mt-3 font-extrabold group-hover:text-white transition-colors">
-              Rejected
-            </div>
+            <div className="cs-stat-label">Rejected</div>
           </div>
         </Link>
       </div>
 
-      {/* Main Charts Row Matching Mockup */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: Registrations Overview (Bar Chart) */}
-        <div className="lg:col-span-7 cyber-chart-card flex flex-col justify-between">
+      {/* Main Charts Row aligned to the same grid as the stat cards */}
+      <div className="cs-chart-grid">
+        {/* Left: Registrations Overview Bar Chart */}
+        <div className="cs-span-7 cyber-chart-card flex flex-col justify-between">
           <RegistrationsBarChart
             data={registrationTrend}
             onBarClick={() => navigate('/coordinator/participants')}
           />
         </div>
 
-        {/* Right: Registrations by Event (Donut Chart) */}
-        <div className="lg:col-span-5 cyber-chart-card flex flex-col justify-between">
+        {/* Right: Registrations by Event Donut Chart with View Toggle */}
+        <div className="cs-span-5 cyber-chart-card flex flex-col justify-between">
           <EventDonutChart
             title={activeChart.title}
             subtitle={activeChart.subtitle}

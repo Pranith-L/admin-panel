@@ -15,6 +15,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
+let cachedCoordinatorClient = null;
+let lastCoordinatorToken = null;
+
 // Coordinator dynamic client constructor with x-coordinator-token header support
 // Exactly matching CS-backend-new2/CoOrd/js/supabase.js and Supabase current_actor_id() SQL
 export function getCoordinatorClient(token) {
@@ -29,13 +32,23 @@ export function getCoordinatorClient(token) {
       }
     })();
 
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  if (cachedCoordinatorClient && lastCoordinatorToken === coordinatorToken) {
+    return cachedCoordinatorClient;
+  }
+
+  cachedCoordinatorClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: 'cs_coord_auth',
     },
     global: {
       headers: coordinatorToken ? { 'x-coordinator-token': coordinatorToken } : {},
     },
   });
+  lastCoordinatorToken = coordinatorToken;
+
+  return cachedCoordinatorClient;
 }
 
