@@ -63,7 +63,7 @@ export default function CoordinatorDashboard() {
     primaryEventName,
     eventsLoading,
     refreshEvents,
-  } = useCoordinatorAssignedEvents(client, coordId);
+  } = useCoordinatorAssignedEvents(client, coordId, coordinatorProfile);
 
   const loadData = async () => {
     try {
@@ -195,7 +195,56 @@ export default function CoordinatorDashboard() {
     return selDay || evRegs.length > 0 || spRegs.length > 0;
   }).length || totalRegistrations;
 
-  const registrationTrend = buildRegistrationTrend(registrations.length ? registrations : participants);
+  // For the left-side bars ("Daily Registration Flow"), ONLY show registrations for the logged-in event
+  const effectiveAssignedNormal = (assignedEvents && assignedEvents.length > 0)
+    ? assignedEvents
+    : (coordinatorProfile?.assigned_events && coordinatorProfile.assigned_events.length > 0
+        ? coordinatorProfile.assigned_events
+        : (coordinatorProfile?.event_name ? [{ name: coordinatorProfile.event_name, code: coordinatorProfile.event_code }] : []));
+  const effectiveAssignedSpecial = assignedSpecialEvents || [];
+
+  const loggedInEventRegistrations = (registrations || []).filter((reg) => {
+    if (!effectiveAssignedNormal.length && !effectiveAssignedSpecial.length) return true;
+
+    const evRegs = reg.selected_event_registrations || reg.event_registrations || [];
+    const spRegs = reg.special_event_registrations || [];
+
+    const matchesNormal = evRegs.some((er) => {
+      const e = er.events || er;
+      const eventId = String(er.event_id || e.id || '');
+      const eventCode = String(e.code || '').toUpperCase();
+      const eventName = String(e.name || '').toLowerCase();
+
+      return effectiveAssignedNormal.some((ae) => {
+        const aeId = String(ae.id || '');
+        const aeCode = String(ae.code || '').toUpperCase();
+        const aeName = String(ae.name || '').toLowerCase();
+        return (aeId && aeId === eventId) || (aeCode && aeCode === eventCode) || (aeName && aeName === eventName);
+      });
+    });
+
+    const matchesSpecial = spRegs.some((sr) => {
+      const se = sr.special_events || sr;
+      const spId = String(sr.special_event_id || se.id || '');
+      const spCode = String(se.code || '').toUpperCase();
+      const spName = String(se.name || '').toLowerCase();
+
+      return effectiveAssignedSpecial.some((ase) => {
+        const aseId = String(ase.id || '');
+        const aseCode = String(ase.code || '').toUpperCase();
+        const aseName = String(ase.name || '').toLowerCase();
+        return (aseId && aseId === spId) || (aseCode && aseCode === spCode) || (aseName && aseName === spName);
+      });
+    });
+
+    return matchesNormal || matchesSpecial;
+  });
+
+  const barChartRegistrations = (effectiveAssignedNormal.length || effectiveAssignedSpecial.length)
+    ? (loggedInEventRegistrations.length > 0 ? loggedInEventRegistrations : participants)
+    : (registrations.length ? registrations : participants);
+
+  const registrationTrend = buildRegistrationTrend(barChartRegistrations);
 
   const canonicalDay1Events = [
     { id: 'PP', code: 'PP', name: 'Paper Presentation', day: 'DAY_1' },

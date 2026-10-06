@@ -24,16 +24,29 @@ export function getKnownCoordinatorAssignmentsById(coordinatorId) {
   if (!coordinatorId || typeof coordinatorId !== 'string') return [];
 
   const normalized = coordinatorId.toLowerCase();
-  const match = Object.entries(KNOWN_COORDINATOR_ASSIGNMENTS).find(([email]) => {
+  const match = Object.entries(KNOWN_COORDINATOR_ASSIGNMENTS).find(([email, evts]) => {
     const slug = email.toLowerCase().replace(/[^a-z0-9]/g, '');
-    return normalized.includes(slug) || normalized.includes(email.toLowerCase());
+    const firstEvt = evts[0] || {};
+    const evtName = (firstEvt.name || '').toLowerCase();
+    const evtCode = (firstEvt.code || '').toLowerCase();
+    return (
+      normalized.includes(slug) ||
+      normalized.includes(email.toLowerCase()) ||
+      (evtName && (normalized.includes(evtName) || evtName.includes(normalized))) ||
+      (evtCode && (normalized === evtCode || normalized.includes(evtCode)))
+    );
   });
 
   return match ? match[1] : [];
 }
 
-export async function getCoordinatorAssignedEvents(client, userId) {
-  return cachedRequest(`coord-events:${userId || 'anon'}`, async () => {
+export async function getCoordinatorAssignedEvents(client, userId, coordinatorProfile = null) {
+  const profileKey = coordinatorProfile?.email || coordinatorProfile?.id || userId || 'anon';
+  return cachedRequest(`coord-events:${profileKey}`, async () => {
+    if (coordinatorProfile?.assigned_events && Array.isArray(coordinatorProfile.assigned_events) && coordinatorProfile.assigned_events.length > 0) {
+      return { normalEvents: coordinatorProfile.assigned_events, specialEvents: [] };
+    }
+
     let normalAssignments = { data: [], error: null };
     let specialAssignments = { data: [], error: null };
 
@@ -50,9 +63,6 @@ export async function getCoordinatorAssignedEvents(client, userId) {
       ]);
     }
 
-    if (normalAssignments.error) throw normalAssignments.error;
-    if (specialAssignments.error) throw specialAssignments.error;
-
     const normalEvents = (normalAssignments.data || [])
       .map((item) => item.events)
       .filter(Boolean);
@@ -61,29 +71,29 @@ export async function getCoordinatorAssignedEvents(client, userId) {
       .map((item) => item.special_events)
       .filter(Boolean);
 
-    if ((normalEvents.length || specialEvents.length) || !userId) {
+    if (normalEvents.length || specialEvents.length) {
       return { normalEvents, specialEvents };
     }
 
-    const fallbackProfile = await client
-      .from('profiles')
-      .select('email')
-      .eq('id', userId)
-      .maybeSingle();
+    const profileEmail = coordinatorProfile?.email || '';
+    const profileName = coordinatorProfile?.name || '';
+    const profileEventName = coordinatorProfile?.event_name || '';
 
-    const fallbackEmail = fallbackProfile?.data?.email || '';
-    const fallbackForEmail = fallbackEmail ? KNOWN_COORDINATOR_ASSIGNMENTS[fallbackEmail] || KNOWN_COORDINATOR_ASSIGNMENTS[fallbackEmail.toLowerCase()] || [] : [];
+    const fallbackMatch =
+      (profileEmail && (KNOWN_COORDINATOR_ASSIGNMENTS[profileEmail] || KNOWN_COORDINATOR_ASSIGNMENTS[profileEmail.toLowerCase()])) ||
+      getKnownCoordinatorAssignmentsById(profileEmail) ||
+      getKnownCoordinatorAssignmentsById(profileEventName) ||
+      getKnownCoordinatorAssignmentsById(profileName) ||
+      getKnownCoordinatorAssignmentsById(userId);
 
-    const knownFallback = fallbackForEmail.length ? fallbackForEmail : getKnownCoordinatorAssignmentsById(userId);
-
-    if (knownFallback.length) {
+    if (fallbackMatch && fallbackMatch.length) {
       return {
-        normalEvents: knownFallback,
+        normalEvents: fallbackMatch,
         specialEvents: [],
       };
     }
 
-    return { normalEvents, specialEvents };
+    return { normalEvents: [], specialEvents: [] };
   }, 20000);
 }
 

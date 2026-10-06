@@ -559,20 +559,26 @@
    ======================================================== */
 .cyber-fixed-bg {
   position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
   z-index: 0;
   pointer-events: none;
   background-image: 
-    linear-gradient(180deg, rgba(3, 6, 18, 0.72) 0%, rgba(3, 6, 18, 0.58) 35%, rgba(3, 5, 16, 0.74) 70%, rgba(2, 4, 12, 0.94) 100%),
-    url('/assets/cyberpunk_city_bg.jpg');
+    radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.08) 0%, transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(168, 85, 247, 0.08) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(244, 63, 94, 0.04) 0%, transparent 55%),
+    linear-gradient(180deg, #040816 0%, #060a1e 50%, #030612 100%);
   background-size: cover;
-  background-position: center top;
+  background-position: center;
   background-repeat: no-repeat;
   transform: translate3d(0, 0, 0);
   -webkit-transform: translate3d(0, 0, 0);
-  filter: brightness(0.68) contrast(1.02);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 @keyframes cyberLaserScan {

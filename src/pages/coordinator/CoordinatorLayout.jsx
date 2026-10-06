@@ -28,7 +28,8 @@ export default function CoordinatorLayout() {
   const coordinatorId = coordinatorProfile?.id || user?.id || null;
   const { assignedEvents, primaryEventName, eventsLoading } = useCoordinatorAssignedEvents(
     getCoordinatorClientInstance(),
-    coordinatorId
+    coordinatorId,
+    coordinatorProfile
   );
 
   const navigate = useNavigate();
